@@ -1,85 +1,117 @@
-# Smart API — API Inteligente com Reconhecimento de Fala
+# smart-api
 
-> API REST com assistente financeiro via linguagem natural e transcrição de áudio. Construída com Spring Boot e Spring AI, usando **Groq** como provider de IA (gratuito) e **H2** como banco em memória (sem precisar de Docker).
+API REST com assistente financeiro inteligente, reconhecimento de fala e processamento de linguagem natural. O projeto surgiu de um desafio de integrar Spring Boot com modelos de IA modernos — conectar transcrição de áudio, tool calling e um LLM num fluxo só foi bem interessante de montar.
 
----
+O assistente consegue entender uma mensagem como "gastei 80 reais no mercado hoje" e automaticamente registrar a transação no banco, sem precisar de nenhum formulário.
 
-## Stack
+## Tecnologias
 
 - Java 21
 - Spring Boot 3.4.5
 - Spring AI 1.0.0
-- Groq API — `llama-3.3-70b-versatile` (chat) + `whisper-large-v3` (transcrição)
-- H2 Database (em memória)
+- Groq API — LLM `llama-3.3-70b-versatile` e transcrição `whisper-large-v3`
+- H2 (banco em memória)
 - Lombok
 
----
+## Como rodar
 
-## Setup
-
-### Pré-requisitos
-
+Você vai precisar de:
 - Java 21+
 - IntelliJ IDEA
-- Chave da API Groq — gratuita em [console.groq.com](https://console.groq.com)
+- Uma chave da API do Groq (gratuita em [console.groq.com](https://console.groq.com))
 
-### Configurando
+Clone o repositório e abra no IntelliJ. Antes de rodar, coloque sua chave no `application.properties`:
 
-1. Abre o arquivo `src/main/resources/application.properties`
-2. Substitui `SUA_CHAVE_GROQ_AQUI` pela sua chave do Groq
-3. Roda a classe `SmartApiApplication` no IntelliJ
+```properties
+spring.ai.openai.api-key=sua_chave_aqui
+```
 
-Sem Docker, sem configuração de banco. O H2 sobe automaticamente junto com a aplicação.
-
----
+Depois é só rodar a classe `SmartApiApplication`. Sem Docker, sem banco externo — o H2 já sobe junto com a aplicação.
 
 ## Endpoints
 
 ### Chat
 
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| POST | `/chat` | Envia mensagem de texto ao assistente |
-| POST | `/chat/transcribe` | Envia arquivo de áudio, recebe transcrição + resposta |
+**POST /chat**
+
+Manda uma mensagem em texto e o assistente responde. Se você mencionar uma transação, ele registra automaticamente usando tool calling.
+
+```json
+{
+  "message": "Gastei 50 reais no mercado hoje"
+}
+```
+
+Resposta:
+```json
+{
+  "response": "Anotei! Registrei uma despesa de R$ 50,00 na categoria mercado."
+}
+```
+
+**POST /chat/transcribe**
+
+Manda um arquivo de áudio (mp3, wav, m4a) e recebe de volta a transcrição e a resposta do assistente.
+
+```
+Content-Type: multipart/form-data
+file: audio.mp3
+```
+
+Resposta:
+```json
+{
+  "transcription": "gastei oitenta reais no mercado",
+  "response": "Registrei a despesa de R$ 80,00!"
+}
+```
 
 ### Transações
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
 | GET | `/transactions` | Lista todas as transações |
-| GET | `/transactions/{id}` | Busca por ID |
-| POST | `/transactions` | Cria transação manualmente |
-| DELETE | `/transactions/{id}` | Remove transação |
+| GET | `/transactions/{id}` | Busca uma transação por ID |
+| POST | `/transactions` | Cria uma transação manualmente |
+| DELETE | `/transactions/{id}` | Remove uma transação |
 
 ### H2 Console
 
-Acessível em `http://localhost:8080/h2-console` com:
+Durante o desenvolvimento dá pra inspecionar o banco direto no navegador em `http://localhost:8080/h2-console`.
+
 - JDBC URL: `jdbc:h2:mem:smartapi`
 - User: `sa`
-- Password: (vazio)
+- Password: deixa vazio
 
----
+## Como o tool calling funciona
 
-## Exemplos
+Uma das partes mais interessantes do projeto foi implementar o tool calling. Em vez de só gerar texto, o modelo consegue chamar funções reais da aplicação.
 
-**Chat:**
-```json
-POST /chat
-{ "message": "Gastei 50 reais no mercado hoje" }
+Criei três ferramentas que o LLM pode invocar:
+
+- `saveTransaction` — registra uma despesa ou receita no banco
+- `getBudgetSummary` — retorna o resumo financeiro com receitas, despesas e saldo
+- `listTransactions` — lista todas as transações cadastradas
+
+Quando você manda "qual meu saldo?", o modelo identifica que precisa chamar `getBudgetSummary`, busca os dados reais e responde com base neles. Tudo isso de forma transparente pra quem usa a API.
+
+## Estrutura do projeto
+
 ```
-
-**Resposta:**
-```json
-{ "response": "Registrei a despesa de R$ 50,00 na categoria mercado!" }
+src/main/java/com/micaelatamir/smartapi/
+├── config/
+│   └── ChatConfig.java          # Configuração do ChatClient com system prompt e tools
+├── controller/
+│   ├── ChatController.java      # Endpoints de chat e transcrição
+│   └── TransactionController.java
+├── model/
+│   └── Transaction.java
+├── repository/
+│   └── TransactionRepository.java
+├── service/
+│   ├── AssistantService.java    # Orquestra o chat com o LLM
+│   └── TranscriptionService.java
+└── tool/
+    └── BudgetTools.java         # Funções que a IA pode chamar
 ```
-
-**Transcrição:**
-```
-POST /chat/transcribe
-Content-Type: multipart/form-data
-file: audio.mp3
-```
-
----
-
-Desenvolvido por [Micaela Tamir](https://github.com/Micaelatamir)
+Quando você manda "qual meu saldo?", o modelo identifica que precisa chamar getBudgetSummary, busca os dados reais e responde com base neles. Tudo isso de forma transparente pra quem usa a API.or [Micaela Tamir](https://github.com/Micaelatamir)
