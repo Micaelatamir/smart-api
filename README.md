@@ -1,32 +1,32 @@
 # smart-api
 
-API REST com assistente financeiro inteligente, reconhecimento de fala e processamento de linguagem natural. O projeto surgiu de um desafio de integrar Spring Boot com modelos de IA modernos — conectar transcrição de áudio, tool calling e um LLM num fluxo só foi bem interessante de montar.
+A REST API with an intelligent financial assistant, speech recognition, and natural language processing. The project came from the challenge of integrating Spring Boot with modern AI models — connecting audio transcription, tool calling, and an LLM into a single flow was genuinely fun to put together.
 
-O assistente consegue entender uma mensagem como "gastei 80 reais no mercado hoje" e automaticamente registrar a transação no banco, sem precisar de nenhum formulário.
+The assistant can understand a message like "I spent 80 dollars on groceries today" and automatically log the transaction to the database, no form or manual input needed.
 
-## Tecnologias
+## Tech Stack
 
 - Java 21
 - Spring Boot 3.4.5
 - Spring AI 1.0.0
-- Groq API — LLM `llama-3.3-70b-versatile` e transcrição `whisper-large-v3`
-- H2 (banco em memória)
+- Groq API — LLM `llama-3.3-70b-versatile` and transcription `whisper-large-v3`
+- H2 (in-memory database)
 - Lombok
 
-## Como rodar
+## Getting Started
 
-Você vai precisar de:
+You'll need:
 - Java 21+
 - IntelliJ IDEA
-- Uma chave da API do Groq (gratuita em [console.groq.com](https://console.groq.com))
+- A Groq API key (free at [console.groq.com](https://console.groq.com))
 
-Clone o repositório e abra no IntelliJ. Antes de rodar, coloque sua chave no `application.properties`:
+Clone the repo and open it in IntelliJ. Before running, add your key to `application.properties`:
 
 ```properties
-spring.ai.openai.api-key=sua_chave_aqui
+spring.ai.openai.api-key=your_key_here
 ```
 
-Depois é só rodar a classe `SmartApiApplication`. Sem Docker, sem banco externo — o H2 já sobe junto com a aplicação.
+Then just run `SmartApiApplication`. No Docker, no external database — H2 starts automatically with the application.
 
 ## Endpoints
 
@@ -34,84 +34,83 @@ Depois é só rodar a classe `SmartApiApplication`. Sem Docker, sem banco extern
 
 **POST /chat**
 
-Manda uma mensagem em texto e o assistente responde. Se você mencionar uma transação, ele registra automaticamente usando tool calling.
+Send a text message and the assistant replies. If you mention a transaction, it gets logged automatically via tool calling.
 
 ```json
 {
-  "message": "Gastei 50 reais no mercado hoje"
+  "message": "I spent 50 dollars at the supermarket today"
 }
 ```
 
-Resposta:
+Response:
 ```json
 {
-  "response": "Anotei! Registrei uma despesa de R$ 50,00 na categoria mercado."
+  "response": "Got it! Logged an expense of $50.00 under groceries."
 }
 ```
 
 **POST /chat/transcribe**
 
-Manda um arquivo de áudio (mp3, wav, m4a) e recebe de volta a transcrição e a resposta do assistente.
+Send an audio file (mp3, wav, m4a) and get back the transcription plus the assistant's response.
 
 ```
 Content-Type: multipart/form-data
 file: audio.mp3
 ```
 
-Resposta:
+Response:
 ```json
 {
-  "transcription": "gastei oitenta reais no mercado",
-  "response": "Registrei a despesa de R$ 80,00!"
+  "transcription": "I spent eighty dollars at the supermarket",
+  "response": "Logged the $80.00 expense!"
 }
 ```
 
-### Transações
+### Transactions
 
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| GET | `/transactions` | Lista todas as transações |
-| GET | `/transactions/{id}` | Busca uma transação por ID |
-| POST | `/transactions` | Cria uma transação manualmente |
-| DELETE | `/transactions/{id}` | Remove uma transação |
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `/transactions` | List all transactions |
+| GET | `/transactions/{id}` | Get a transaction by ID |
+| POST | `/transactions` | Create a transaction manually |
+| DELETE | `/transactions/{id}` | Delete a transaction |
 
 ### H2 Console
 
-Durante o desenvolvimento dá pra inspecionar o banco direto no navegador em `http://localhost:8080/h2-console`.
+During development you can inspect the database directly in the browser at `http://localhost:8080/h2-console`.
 
 - JDBC URL: `jdbc:h2:mem:smartapi`
 - User: `sa`
-- Password: deixa vazio
+- Password: leave empty
 
-## Como o tool calling funciona
+## How Tool Calling Works
 
-Uma das partes mais interessantes do projeto foi implementar o tool calling. Em vez de só gerar texto, o modelo consegue chamar funções reais da aplicação.
+One of the most interesting parts of this project was implementing tool calling. Instead of just generating text, the model can invoke real functions in the application.
 
-Criei três ferramentas que o LLM pode invocar:
+I built three tools the LLM can call:
 
-- `saveTransaction` — registra uma despesa ou receita no banco
-- `getBudgetSummary` — retorna o resumo financeiro com receitas, despesas e saldo
-- `listTransactions` — lista todas as transações cadastradas
+- `saveTransaction` — logs an expense or income to the database
+- `getBudgetSummary` — returns a financial summary with income, expenses, and balance
+- `listTransactions` — lists all recorded transactions
 
-Quando você manda "qual meu saldo?", o modelo identifica que precisa chamar `getBudgetSummary`, busca os dados reais e responde com base neles. Tudo isso de forma transparente pra quem usa a API.
+When you ask "what's my balance?", the model identifies it needs to call `getBudgetSummary`, fetches the real data, and responds based on it. All transparent to whoever is consuming the API.
 
-## Estrutura do projeto
+## Project Structure
 
 ```
 src/main/java/com/micaelatamir/smartapi/
 ├── config/
-│   └── ChatConfig.java          # Configuração do ChatClient com system prompt e tools
+│   └── ChatConfig.java            # ChatClient setup with system prompt and tools
 ├── controller/
-│   ├── ChatController.java      # Endpoints de chat e transcrição
+│   ├── ChatController.java        # Chat and transcription endpoints
 │   └── TransactionController.java
 ├── model/
 │   └── Transaction.java
 ├── repository/
 │   └── TransactionRepository.java
 ├── service/
-│   ├── AssistantService.java    # Orquestra o chat com o LLM
+│   ├── AssistantService.java      # Orchestrates the LLM chat flow
 │   └── TranscriptionService.java
 └── tool/
-    └── BudgetTools.java         # Funções que a IA pode chamar
-```
-Quando você manda "qual meu saldo?", o modelo identifica que precisa chamar getBudgetSummary, busca os dados reais e responde com base neles. Tudo isso de forma transparente pra quem usa a API.or [Micaela Tamir](https://github.com/Micaelatamir)
+    └── BudgetTools.java           # Functions the AI can call
+```ps://github.com/Micaelatamir)
